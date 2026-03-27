@@ -1,0 +1,9 @@
+﻿# Arquivos de ambiente
+.env
+# Arquivos temporarios do Windows
+*.log
+*.tmp
+~$*
+# Cache do PowerShell
+*.pssc
+*.psm1_disabled

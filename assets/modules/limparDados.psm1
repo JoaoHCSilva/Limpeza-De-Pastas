@@ -1,34 +1,63 @@
-function Exclude-filesByDate {
+# LimpezaDePastas/assets/modules/limparDados.psm1
+
+function Get-FilesByDate {
+    <#
+    .SYNOPSIS
+        Retorna lista de arquivos dentro do intervalo de datas, sem deletar.
+    #>
     param (
         [string]$caminho,
         [string]$dataInicial,
         [string]$dataFinal
     )
- 
-    # Verificar se o caminho existe
-    if (Test-Path -Path $caminho) {
-        $dataInicial = [datetime]$dataInicial
-        $dataFinal = [datetime]$dataFinal
 
-        # Obter arquivos dentro do intervalo de datas e remover
-        $arquivosParaRemover = Get-ChildItem -Path $caminho -Recurse | Where-Object {
-            $_.LastWriteTime -ge $dataInicial -and $_.LastWriteTime -le $dataFinal
-        }
-    } else {
+    if (-not (Test-Path -Path $caminho)) {
+        return @{ erro = "Caminho não encontrado: $caminho" }
+    }
+
+    $inicio = [datetime]$dataInicial
+    $fim    = [datetime]$dataFinal
+
+    $arquivos = Get-ChildItem -Path $caminho -Recurse -File |
+        Where-Object { $_.LastWriteTime -ge $inicio -and $_.LastWriteTime -le $fim } |
+        Select-Object -ExpandProperty FullName
+
+    return @{
+        total    = $arquivos.Count
+        arquivos = @($arquivos)
+    }
+}
+
+function Exclude-filesByDate {
+    <#
+    .SYNOPSIS
+        Remove arquivos dentro do intervalo de datas (modo simulado com -WhatIf).
+    #>
+    param (
+        [string]$caminho,
+        [string]$dataInicial,
+        [string]$dataFinal
+    )
+
+    if (-not (Test-Path -Path $caminho)) {
         Write-Host "O caminho especificado não existe: $caminho está correto de fato?" -ForegroundColor Red
         return
     }
 
-    # Verificar se foram encontrados arquivos para remover
+    $inicio = [datetime]$dataInicial
+    $fim    = [datetime]$dataFinal
+
+    $arquivosParaRemover = Get-ChildItem -Path $caminho -Recurse -File |
+        Where-Object { $_.LastWriteTime -ge $inicio -and $_.LastWriteTime -le $fim }
+
     if (-not $arquivosParaRemover) {
         Write-Host "Nenhum arquivo encontrado para remover." -ForegroundColor Yellow
         return
     }
 
-    # Remover os arquivos encontrados
     Write-Host "Foram encontrados $($arquivosParaRemover.Count) arquivos para remover." -ForegroundColor Yellow
-    $arquivosParaRemover | Remove-Item -Force 
-    Write-Host "Remoção simulada concluída. Verifique os arquivos listados acima." -ForegroundColor Green
+    $arquivosParaRemover | Remove-Item -Force -WhatIf
+    Write-Host "Remoção simulada concluída." -ForegroundColor Green
 }
 
-Export-ModuleMember -Function Exclude-filesByDate
+Export-ModuleMember -Function Get-FilesByDate, Exclude-filesByDate

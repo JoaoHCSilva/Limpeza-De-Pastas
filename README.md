@@ -34,7 +34,7 @@ LimpezaDePastas/
 
 ## Autor
 
-Seu Nome - [seu-email@exemplo.com]
+João Henrique - [joaohh41@hotmail.com]
 
 ## Licenca
 

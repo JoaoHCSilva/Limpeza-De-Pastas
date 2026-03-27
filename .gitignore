@@ -7,3 +7,4 @@
 # Cache do PowerShell
 *.pssc
 *.psm1_disabled
+assets/lib/

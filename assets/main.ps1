@@ -111,17 +111,14 @@ $script:webview.add_CoreWebView2InitializationCompleted({
                 }
 
                 "deleteFiles" {
-                    $antes = Get-FilesByDate `
-                        -caminho     $msg.path `
-                        -dataInicial $msg.startDate `
-                        -dataFinal   $msg.endDate
-                    Exclude-filesByDate `
+                    $resultado = Exclude-filesByDate `
                         -caminho     $msg.path `
                         -dataInicial $msg.startDate `
                         -dataFinal   $msg.endDate
                     Send-ToJS -webview $script:webview -data @{
-                        action = "deleteResult"
-                        total  = $antes.total
+                        action  = "deleteResult"
+                        total   = $resultado.totalArquivos
+                        pastas  = $resultado.totalPastas
                     }
                 }
             }

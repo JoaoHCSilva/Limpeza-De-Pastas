@@ -1,92 +1,144 @@
-﻿# ============================================
-# LimpezaDePastas
 # ============================================
-# Descricao: [Descreva o objetivo do script]
-# Autor: [Seu Nome]
+# LimpezaDePastas — WebView2 Host
+# ============================================
+# Descricao: Interface grafica via WebView2 para limpeza de arquivos por data
 # Data: 27/03/2026
 # ============================================
 
-# Configuracoes iniciais
 $ErrorActionPreference = "Stop"
 
-# ============================================
-# FUNCOES
-# ============================================
+# ── Dependências ──────────────────────────────────────────
+$libDir = "$PSScriptRoot\lib"
+if (-not (Test-Path "$libDir\Microsoft.Web.WebView2.WinForms.dll")) {
+    Write-Host "DLLs do WebView2 não encontradas. Execute setup.ps1 primeiro." -ForegroundColor Red
+    Read-Host "Pressione Enter para sair"
+    exit 1
+}
 
-Import-Module -Name "$PSScriptRoot\modules\folderSelect.psm1" -Force
+Add-Type -Path "$libDir\Microsoft.Web.WebView2.Core.dll"
+Add-Type -Path "$libDir\Microsoft.Web.WebView2.WinForms.dll"
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
 Import-Module -Name "$PSScriptRoot\modules\limparDados.psm1" -Force
-Import-Module -Name "$PSScriptRoot\modules\dateSelect.psm1" -Force
 
-function Show-Menu {
-    <#
-    .SYNOPSIS
-        Exibe o menu principal do script
-    #>
-    Clear-Host
-    Write-Host ""
-    Write-Host "=========================================" -ForegroundColor Cyan
-    Write-Host "   LimpezaDePastas                          " -ForegroundColor Cyan
-    Write-Host "=========================================" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "[1] Caminho do diretório" -ForegroundColor White
-    Write-Host "[0] Sair" -ForegroundColor Red
-    Write-Host ""
-}
-
-function Confirm-Action {
-    param (
-        [string]$message
+# ── Helper: enviar dados para o JS ────────────────────────
+function Send-ToJS {
+    param(
+        [Microsoft.Web.WebView2.WinForms.WebView2]$webview,
+        [object]$data
     )
-
-    $confirmation = Read-Host "$message (S/N)"
-    return $confirmation -eq "S"
+    $json    = $data | ConvertTo-Json -Compress -Depth 10
+    # Escapar backslashes primeiro (JSON já tem \\, JS precisa de \\\\), depois single quotes
+    $escaped = $json -replace '\\', '\\\\' -replace "'", "\'"
+    $webview.CoreWebView2.ExecuteScriptAsync("receiveMessage('$escaped')") | Out-Null
 }
 
-function Invoke-Option1 {
-    <#
-    .SYNOPSIS
-        Executa a opcao 1
-    #>
-    Write-Host "Qual o caminho do diretório?" -ForegroundColor Green
-    $caminho = SelectFolder
-    $dataSelecionada = DateSelection
+# ── Janela principal ──────────────────────────────────────
+$script:form                 = New-Object System.Windows.Forms.Form
+$script:form.Text            = "LimpezaDePastas"
+$script:form.Size            = New-Object System.Drawing.Size(500, 620)
+$script:form.StartPosition   = "CenterScreen"
+$script:form.FormBorderStyle = "FixedSingle"
+$script:form.MaximizeBox     = $false
+$script:form.BackColor       = [System.Drawing.Color]::FromArgb(15, 15, 15)
 
-    if ($dataSelecionada -and $caminho) {
-        $dataInicial = $dataSelecionada[0]
-        $dataFinal = $dataSelecionada[1]
-        Write-Host "Data Inicial: $($dataInicial.ToShortDateString())" -ForegroundColor Green
-        Write-Host "Data Final: $($dataFinal.ToShortDateString())" -ForegroundColor Green
-        Write-Host "Caminho selecionado: $caminho" -ForegroundColor Green
-        if (Confirm-Action -message "Deseja continuar com esta ação?") {
-            Exclude-filesByDate -caminho $caminho -dataInicial $dataInicial -dataFinal $dataFinal
-        } else {
-            Write-Host "Ação cancelada pelo usuário." -ForegroundColor Yellow
-        }
-    } else {
-        Write-Host "Operação cancelada (pasta ou datas não selecionadas)." -ForegroundColor Yellow
+# ── Controle WebView2 ─────────────────────────────────────
+# Usar $script: garante acesso ao $webview dentro de script blocks aninhados
+$script:webview      = New-Object Microsoft.Web.WebView2.WinForms.WebView2
+$script:webview.Dock = [System.Windows.Forms.DockStyle]::Fill
+$script:form.Controls.Add($script:webview)
+
+# ── Inicialização do WebView2 ─────────────────────────────
+# Capturar $PSScriptRoot antes do handler (não disponível dentro de script blocks .NET)
+$script:htmlPath = ("file:///" + "$PSScriptRoot\app.html") -replace '\\', '/'
+
+$script:webview.add_CoreWebView2InitializationCompleted({
+    param($wv2Sender, $initArgs)
+    if (-not $initArgs.IsSuccess) {
+        Write-Host "Erro ao inicializar WebView2: $($initArgs.InitializationException.Message)" -ForegroundColor Red
+        return
     }
-    Read-Host "Pressione Enter para continuar"
-}
+    if (-not $script:webview.CoreWebView2) { return }
+    $script:webview.CoreWebView2.Navigate($script:htmlPath)
 
-# ============================================
-# LOOP PRINCIPAL
-# ============================================
+    $script:webview.CoreWebView2.add_WebMessageReceived({
+        param($msgSender, $msgArgs)
+        try {
+            # WebMessageAsString é vazio nesta versão do WebView2 para mensagens JSON.
+            # WebMessageAsJson retorna a mensagem duplamente codificada ("\"{ ... }\""),
+            # por isso dois ConvertFrom-Json: primeiro desempacota a string, depois parseia o objeto.
+            $msg = $msgArgs.WebMessageAsJson | ConvertFrom-Json | ConvertFrom-Json
 
-do {
-    Show-Menu
-    $opcao = Read-Host "Escolha uma opcao"
-    
-    switch ($opcao) {
-        "1" { Invoke-Option1 }
-        "0" { 
-            Write-Host "Saindo..." -ForegroundColor Yellow
-            break 
+            switch ($msg.action) {
+
+                "openFolder" {
+                    $script:selectedFolderPath = $null
+                    $script:form.Invoke([Action]{
+                        $dialog             = New-Object System.Windows.Forms.FolderBrowserDialog
+                        $dialog.Description = "Selecione a pasta alvo para limpeza"
+                        if ($dialog.ShowDialog($script:form) -eq [System.Windows.Forms.DialogResult]::OK) {
+                            $script:selectedFolderPath = $dialog.SelectedPath
+                        }
+                    })
+                    if ($script:selectedFolderPath) {
+                        Send-ToJS -webview $script:webview -data @{
+                            action = "folderSelected"
+                            path   = $script:selectedFolderPath
+                        }
+                    }
+                }
+
+                "scanFiles" {
+                    $resultado = Get-FilesByDate `
+                        -caminho     $msg.path `
+                        -dataInicial $msg.startDate `
+                        -dataFinal   $msg.endDate
+                    if ($resultado.erro) {
+                        Send-ToJS -webview $script:webview -data @{
+                            action   = "scanResult"
+                            total    = 0
+                            arquivos = @()
+                            erro     = $resultado.erro
+                        }
+                    } else {
+                        Send-ToJS -webview $script:webview -data @{
+                            action   = "scanResult"
+                            total    = $resultado.total
+                            arquivos = $resultado.arquivos
+                        }
+                    }
+                }
+
+                "deleteFiles" {
+                    $antes = Get-FilesByDate `
+                        -caminho     $msg.path `
+                        -dataInicial $msg.startDate `
+                        -dataFinal   $msg.endDate
+                    Exclude-filesByDate `
+                        -caminho     $msg.path `
+                        -dataInicial $msg.startDate `
+                        -dataFinal   $msg.endDate
+                    Send-ToJS -webview $script:webview -data @{
+                        action = "deleteResult"
+                        total  = $antes.total
+                    }
+                }
+            }
         }
-        default { 
-            Write-Host "Opcao invalida!" -ForegroundColor Red
-            Start-Sleep -Seconds 1
+        catch {
+            Send-ToJS -webview $script:webview -data @{
+                action   = "scanResult"
+                total    = 0
+                erro     = $_.Exception.Message
+                arquivos = @()
+            }
         }
-    }
-} while ($opcao -ne "0")
+    })
+})
 
-Write-Host "Programa encerrado." -ForegroundColor Cyan
+$wv2UserDataFolder = "$env:TEMP\LimpezaDePastasWV2"
+$wv2Env = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync("", $wv2UserDataFolder).GetAwaiter().GetResult()
+$script:webview.EnsureCoreWebView2Async($wv2Env) | Out-Null
+
+[System.Windows.Forms.Application]::Run($script:form)

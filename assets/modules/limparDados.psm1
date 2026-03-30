@@ -56,7 +56,7 @@ function Exclude-filesByDate {
     }
 
     Write-Host "Foram encontrados $($arquivosParaRemover.Count) arquivos para remover." -ForegroundColor Yellow
-    $arquivosParaRemover | Remove-Item -Force -WhatIf
+    $arquivosParaRemover | Remove-Item -Force
     Write-Host "Remoção simulada concluída." -ForegroundColor Green
 }
 

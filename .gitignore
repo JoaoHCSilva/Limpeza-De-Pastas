@@ -6,5 +6,6 @@
 ~$*
 # Cache do PowerShell
 *.pssc
+*.md
 *.psm1_disabled
 assets/lib/

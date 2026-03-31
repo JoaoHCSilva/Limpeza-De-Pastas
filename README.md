@@ -44,20 +44,6 @@ build.bat "C:\MeusArquivos\Temp" pt-BR
 
 Todos os textos do script estão preparados para fácil tradução. Para alterar o idioma, utilize o parâmetro `-Idioma` (ex: `pt-BR`, `en-US`).
 
-## Estrutura do Projeto
-
-```
-LimpezaDePastas/
-â”œâ”€â”€ main.ps1       # Script principal
-â”œâ”€â”€ build.bat      # Arquivo para execucao rapida
-â”œâ”€â”€ README.md      # Documentacao do projeto
-â””â”€â”€ .gitignore     # Arquivos ignorados pelo Git
-```
-
 ## Autor
 
 João Henrique - [joaohh41@hotmail.com]
-
-## Licenca
-
-Este projeto esta licenciado sob a licenca MIT.

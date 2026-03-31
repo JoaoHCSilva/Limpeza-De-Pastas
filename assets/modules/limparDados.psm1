@@ -1,5 +1,24 @@
 # LimpezaDePastas/assets/modules/limparDados.psm1
 
+
+# Função utilitária para filtrar arquivos por data
+function Get-FilesInDateRange {
+    <#
+    .SYNOPSIS
+        Retorna objetos de arquivos dentro do intervalo de datas especificado.
+    #>
+    param (
+        [string]$caminho,
+        [datetime]$inicio,
+        [datetime]$fim
+    )
+    if (-not (Test-Path -Path $caminho)) {
+        return @()
+    }
+    return Get-ChildItem -Path $caminho -Recurse -File |
+        Where-Object { $_.LastWriteTime -ge $inicio -and $_.LastWriteTime -le $fim }
+}
+
 function Get-FilesByDate {
     <#
     .SYNOPSIS
@@ -18,15 +37,14 @@ function Get-FilesByDate {
     $inicio = [datetime]$dataInicial
     $fim    = [datetime]$dataFinal
 
-    $arquivos = Get-ChildItem -Path $caminho -Recurse -File |
-        Where-Object { $_.LastWriteTime -ge $inicio -and $_.LastWriteTime -le $fim } |
-        Select-Object -ExpandProperty FullName
+    $arquivos = Get-FilesInDateRange -caminho $caminho -inicio $inicio -fim $fim | Select-Object -ExpandProperty FullName
 
     return @{
         total    = $arquivos.Count
         arquivos = @($arquivos)
     }
 }
+
 
 function Exclude-filesByDate {
     <#
@@ -49,8 +67,7 @@ function Exclude-filesByDate {
     $fim    = [datetime]$dataFinal
 
     # ── 1. Remover arquivos no intervalo ──────────────────────
-    $arquivosParaRemover = Get-ChildItem -Path $caminho -Recurse -File |
-        Where-Object { $_.LastWriteTime -ge $inicio -and $_.LastWriteTime -le $fim }
+    $arquivosParaRemover = Get-FilesInDateRange -caminho $caminho -inicio $inicio -fim $fim
 
     $totalArquivos = 0
     if ($arquivosParaRemover) {
@@ -59,8 +76,6 @@ function Exclude-filesByDate {
     }
 
     # ── 2. Remover subpastas vazias (filhos antes dos pais) ───
-    # Ordenar por comprimento do FullName decrescente garante que pastas mais
-    # profundas (filhos) sejam processadas antes das mais rasas (pais).
     $totalPastas = 0
     Get-ChildItem -Path $caminho -Recurse -Directory |
         Sort-Object { $_.FullName.Length } -Descending |
@@ -77,4 +92,4 @@ function Exclude-filesByDate {
     return @{ totalArquivos = $totalArquivos; totalPastas = $totalPastas }
 }
 
-Export-ModuleMember -Function Get-FilesByDate, Exclude-filesByDate
+Export-ModuleMember -Function Get-FilesByDate, Exclude-filesByDate, Get-FilesInDateRange

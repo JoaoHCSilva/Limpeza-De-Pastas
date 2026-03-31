@@ -425,7 +425,8 @@
     }
     else if (msg.action === 'deleteResult') {
       const status = document.getElementById('scan-status')
-      status.textContent = '✓ Limpeza concluída. ' + msg.total + ' arquivo(s) processado(s).'
+      const pastasTxt = msg.pastas > 0 ? ` e ${msg.pastas} pasta(s) removida(s)` : ''
+      status.textContent = '✓ Limpeza concluída. ' + msg.total + ' arquivo(s)' + pastasTxt + '.'
       status.className   = 'scan-status done'
       document.getElementById('btn-back').style.display  = 'none'
       document.getElementById('btn-next').style.display  = 'none'

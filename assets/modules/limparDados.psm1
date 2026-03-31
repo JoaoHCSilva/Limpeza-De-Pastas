@@ -1,3 +1,23 @@
+# Função pura: converte string para datetime com fallback
+function Convert-ToDate {
+    param(
+        [string]$dateStr
+    )
+    try {
+        return [datetime]$dateStr
+    } catch {
+        return $null
+    }
+}
+
+# Função pura: valida se caminho existe e é diretório
+function Test-ValidDirectory {
+    param(
+        [string]$path
+    )
+    return (Test-Path -Path $path -PathType Container)
+}
+
 # LimpezaDePastas/assets/modules/limparDados.psm1
 
 
@@ -30,12 +50,15 @@ function Get-FilesByDate {
         [string]$dataFinal
     )
 
-    if (-not (Test-Path -Path $caminho)) {
-        return @{ erro = "Caminho não encontrado: $caminho" }
+    if (-not (Test-ValidDirectory -path $caminho)) {
+        return @{ erro = "Caminho não encontrado ou inválido: $caminho" }
     }
 
-    $inicio = [datetime]$dataInicial
-    $fim    = [datetime]$dataFinal
+    $inicio = Convert-ToDate $dataInicial
+    $fim    = Convert-ToDate $dataFinal
+    if (-not $inicio -or -not $fim) {
+        return @{ erro = "Data inicial ou final inválida." }
+    }
 
     $arquivos = Get-FilesInDateRange -caminho $caminho -inicio $inicio -fim $fim | Select-Object -ExpandProperty FullName
 
@@ -58,13 +81,17 @@ function Exclude-filesByDate {
         [string]$dataFinal
     )
 
-    if (-not (Test-Path -Path $caminho)) {
-        Write-Host "O caminho especificado não existe: $caminho" -ForegroundColor Red
+    if (-not (Test-ValidDirectory -path $caminho)) {
+        Write-Host "O caminho especificado não existe ou não é diretório: $caminho" -ForegroundColor Red
         return @{ totalArquivos = 0; totalPastas = 0 }
     }
 
-    $inicio = [datetime]$dataInicial
-    $fim    = [datetime]$dataFinal
+    $inicio = Convert-ToDate $dataInicial
+    $fim    = Convert-ToDate $dataFinal
+    if (-not $inicio -or -not $fim) {
+        Write-Host "Data inicial ou final inválida." -ForegroundColor Red
+        return @{ totalArquivos = 0; totalPastas = 0 }
+    }
 
     # ── 1. Remover arquivos no intervalo ──────────────────────
     $arquivosParaRemover = Get-FilesInDateRange -caminho $caminho -inicio $inicio -fim $fim
@@ -92,4 +119,4 @@ function Exclude-filesByDate {
     return @{ totalArquivos = $totalArquivos; totalPastas = $totalPastas }
 }
 
-Export-ModuleMember -Function Get-FilesByDate, Exclude-filesByDate, Get-FilesInDateRange
+Export-ModuleMember -Function Get-FilesByDate, Exclude-filesByDate, Get-FilesInDateRange, Convert-ToDate, Test-ValidDirectory

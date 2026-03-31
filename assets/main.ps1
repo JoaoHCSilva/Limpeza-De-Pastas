@@ -20,19 +20,11 @@ Add-Type -Path "$libDir\Microsoft.Web.WebView2.WinForms.dll"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-Import-Module -Name "$PSScriptRoot\modules\limparDados.psm1" -Force
 
-# ── Helper: enviar dados para o JS ────────────────────────
-function Send-ToJS {
-    param(
-        [Microsoft.Web.WebView2.WinForms.WebView2]$webview,
-        [object]$data
-    )
-    $json    = $data | ConvertTo-Json -Compress -Depth 10
-    # Escapar backslashes primeiro (JSON já tem \\, JS precisa de \\\\), depois single quotes
-    $escaped = $json -replace '\\', '\\\\' -replace "'", "\'"
-    $webview.CoreWebView2.ExecuteScriptAsync("receiveMessage('$escaped')") | Out-Null
-}
+Import-Module -Name "$PSScriptRoot\modules\limparDados.psm1" -Force
+Import-Module -Name "$PSScriptRoot\modules\jsBridge.psm1" -Force
+
+
 
 # ── Janela principal ──────────────────────────────────────
 $script:form                 = New-Object System.Windows.Forms.Form
@@ -71,8 +63,7 @@ $script:webview.add_CoreWebView2InitializationCompleted({
             $msg = $msgArgs.WebMessageAsJson | ConvertFrom-Json | ConvertFrom-Json
 
             switch ($msg.action) {
-
-                "openFolder" {
+                'openFolder' {
                     $script:selectedFolderPath = $null
                     $script:form.Invoke([Action]{
                         $dialog             = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -82,54 +73,26 @@ $script:webview.add_CoreWebView2InitializationCompleted({
                         }
                     })
                     if ($script:selectedFolderPath) {
-                        Send-ToJS -webview $script:webview -data @{
-                            action = "folderSelected"
-                            path   = $script:selectedFolderPath
-                        }
+                        Send-ToJS -webview $script:webview -data @{ action = 'folderSelected'; path = $script:selectedFolderPath }
                     }
                 }
-
-                "scanFiles" {
-                    $resultado = Get-FilesByDate `
-                        -caminho     $msg.path `
-                        -dataInicial $msg.startDate `
-                        -dataFinal   $msg.endDate
-                    if ($resultado.erro) {
-                        Send-ToJS -webview $script:webview -data @{
-                            action   = "scanResult"
-                            total    = 0
-                            arquivos = @()
-                            erro     = $resultado.erro
-                        }
+                'scanFiles' {
+                    $resultado = Get-FilesByDate -caminho $msg.path -dataInicial $msg.startDate -dataFinal $msg.endDate
+                    $scanResult = if ($resultado.erro) {
+                        @{ action = 'scanResult'; total = 0; arquivos = @(); erro = $resultado.erro }
                     } else {
-                        Send-ToJS -webview $script:webview -data @{
-                            action   = "scanResult"
-                            total    = $resultado.total
-                            arquivos = $resultado.arquivos
-                        }
+                        @{ action = 'scanResult'; total = $resultado.total; arquivos = $resultado.arquivos }
                     }
+                    Send-ToJS -webview $script:webview -data $scanResult
                 }
-
-                "deleteFiles" {
-                    $resultado = Exclude-filesByDate `
-                        -caminho     $msg.path `
-                        -dataInicial $msg.startDate `
-                        -dataFinal   $msg.endDate
-                    Send-ToJS -webview $script:webview -data @{
-                        action  = "deleteResult"
-                        total   = $resultado.totalArquivos
-                        pastas  = $resultado.totalPastas
-                    }
+                'deleteFiles' {
+                    $resultado = Exclude-filesByDate -caminho $msg.path -dataInicial $msg.startDate -dataFinal $msg.endDate
+                    Send-ToJS -webview $script:webview -data @{ action = 'deleteResult'; total = $resultado.totalArquivos; pastas = $resultado.totalPastas }
                 }
             }
         }
         catch {
-            Send-ToJS -webview $script:webview -data @{
-                action   = "scanResult"
-                total    = 0
-                erro     = $_.Exception.Message
-                arquivos = @()
-            }
+            Send-ToJS -webview $script:webview -data @{ action = 'scanResult'; total = 0; erro = $_.Exception.Message; arquivos = @() }
         }
     })
 })

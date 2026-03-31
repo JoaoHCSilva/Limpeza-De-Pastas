@@ -43,7 +43,7 @@ $script:form.Controls.Add($script:webview)
 
 # ── Inicialização do WebView2 ─────────────────────────────
 # Capturar $PSScriptRoot antes do handler (não disponível dentro de script blocks .NET)
-$script:htmlPath = ("file:///" + "$PSScriptRoot\app.html") -replace '\\', '/'
+$script:htmlPath = ("file:///" + "$PSScriptRoot\src\html\app.html") -replace '\\', '/'
 
 $script:webview.add_CoreWebView2InitializationCompleted({
     param($wv2Sender, $initArgs)
